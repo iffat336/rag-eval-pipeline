@@ -1,0 +1,34 @@
+[
+  {
+    "question": "What header is used to authenticate Nimbus API requests, and what's the rate limit difference between live and test keys?",
+    "ground_truth": "Requests are authenticated with an `Authorization: Bearer <key>` header. Live keys (prefixed `nb_live_`) are rate limited to 600 requests per minute, while test keys (prefixed `nb_test_`) are limited to 60 requests per minute."
+  },
+  {
+    "question": "How long do OAuth access tokens last and how do you get a new one without the user logging in again?",
+    "ground_truth": "OAuth access tokens expire after 1 hour. You can obtain a new one using the refresh_token returned alongside the access token, by calling https://auth.nimbus.dev/oauth/token, without re-prompting the user."
+  },
+  {
+    "question": "If my webhook endpoint is down, how many times will Nimbus retry delivery and over what time period?",
+    "ground_truth": "Nimbus retries with exponential backoff at 1 minute, 5 minutes, 30 minutes, 2 hours, and then every 6 hours for up to 3 days, after which the event is marked failed."
+  },
+  {
+    "question": "How should I verify that a webhook request actually came from Nimbus?",
+    "ground_truth": "Compute an HMAC-SHA256 signature of the raw request body using your endpoint's signing secret, and compare it to the X-Nimbus-Signature header using a constant-time comparison. You should also check that the X-Nimbus-Timestamp header is not more than 5 minutes old to prevent replay attacks, and you must verify against the raw body, not re-serialized JSON."
+  },
+  {
+    "question": "I'm on the Starter plan and going over my included request quota — what happens, and can I request a higher rate limit?",
+    "ground_truth": "On the Starter plan, requests beyond your included 250,000 are billed as overage at $0.40 per 1,000 requests. However, you cannot request a rate limit increase on the Starter plan — only Growth and Enterprise plans can request limit increases; you would need to upgrade first."
+  },
+  {
+    "question": "What's the difference between how OAuth apps and service accounts authenticate?",
+    "ground_truth": "OAuth apps use the OAuth 2.0 authorization code flow, redirecting users to authorize and receiving an access token that expires after 1 hour with a refresh token for renewal. Service accounts instead authenticate using a signed JWT (RS256) exchanged for a short-lived access token (15 minutes), and cannot use the OAuth authorization code flow."
+  },
+  {
+    "question": "If I cancel my subscription, will I lose my data immediately, and can I get it back?",
+    "ground_truth": "Cancelling stops future billing but does not delete data immediately — data is retained for 30 days, during which reactivating restores the project exactly as it was. After 30 days, data is permanently deleted."
+  },
+  {
+    "question": "What should my retry strategy look like when I get a 429 from the API, and does retrying immediately help?",
+    "ground_truth": "You should implement exponential backoff with jitter using a formula like wait = min(max_backoff, base * 2^attempt) + random(0, jitter), based on the Retry-After header. Retrying immediately after a 429 does not help and can actually extend the throttle window."
+  }
+]
