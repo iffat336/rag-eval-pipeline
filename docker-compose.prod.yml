@@ -1,0 +1,26 @@
+# Self-hosted deployment: runs the demo web app + Qdrant together behind
+# whatever reverse proxy (nginx, Caddy, etc.) already fronts your domain.
+# See README "Deploying on your own server" for the full walkthrough.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    restart: unless-stopped
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    expose:
+      - "6333"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  qdrant_storage:

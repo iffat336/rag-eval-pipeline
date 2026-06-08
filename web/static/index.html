@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Eval Pipeline — Live Demo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>🔎 RAG Eval Pipeline — Live Demo</h1>
+      <p class="subtitle">
+        Hybrid search (semantic + BM25) with cross-encoder reranking, LLM-driven query
+        decomposition, and a grounded, cited answer — powered by the pipeline in
+        <a href="https://github.com/iffat336/rag-eval-pipeline" target="_blank" rel="noopener">rag-eval-pipeline</a>.
+      </p>
+      <details class="about">
+        <summary>About this demo</summary>
+        <p>
+          This runs against a small fictional API documentation set (auth, rate limits,
+          webhooks, and billing for a product called "Nimbus"). Try a compound question —
+          e.g. <em>"How does X compare to Y, and which should I use for Z?"</em> — to see
+          query decomposition split it into sub-questions before retrieving for each one.
+        </p>
+        <p>
+          To keep this demo affordable to run, usage is rate-limited per visitor and
+          per day. If you'd like to run it yourself with your own API key, the full
+          source and setup instructions are in the
+          <a href="https://github.com/iffat336/rag-eval-pipeline#getting-started" target="_blank" rel="noopener">README</a>.
+        </p>
+      </details>
+    </header>
+
+    <section class="examples">
+      <span class="examples-label">Try an example:</span>
+      <div class="example-chips" id="example-chips"></div>
+    </section>
+
+    <form id="ask-form" class="ask-form">
+      <input
+        id="question-input"
+        type="text"
+        maxlength="500"
+        placeholder="Ask about Nimbus's authentication, rate limits, webhooks, or billing…"
+        autocomplete="off"
+      />
+      <button type="submit" id="ask-button">Ask</button>
+    </form>
+    <p class="status" id="status"></p>
+
+    <section id="results"></section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

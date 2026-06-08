@@ -27,6 +27,7 @@ the development loop, not a one-off notebook you run before a demo.
 - [Project layout](#project-layout)
 - [Getting started](#getting-started)
 - [Usage](#usage)
+- [Deploying on your own server](#deploying-on-your-own-server)
 - [Evaluation suite in depth](#evaluation-suite-in-depth)
 - [CI/CD pipeline](#cicd-pipeline)
 - [Configuration reference](#configuration-reference)
@@ -300,6 +301,119 @@ the results with RAGAS, writes a timestamped JSON report to `eval/results/`,
 prints a summary, and **exits with a non-zero status code if any metric falls
 below its threshold** — making it usable directly as a CI gate (which is
 exactly how `.github/workflows/eval.yml` uses it).
+
+### 4. Run the live demo locally
+
+`web/main.py` is a small FastAPI app that wraps the pipeline in a chat-style
+web UI — useful for demoing the project interactively instead of via the CLI.
+
+```bash
+uvicorn web.main:app --reload
+```
+
+Then open `http://localhost:8000`. Two in-memory daily caps
+(`PER_IP_DAILY_LIMIT`, `GLOBAL_DAILY_LIMIT` — see `.env.example`) bound how
+many questions the API will answer, which matters once this is exposed
+publicly (see [Deploying on your own server](#deploying-on-your-own-server)).
+
+## Deploying on your own server
+
+This section walks through putting the live demo behind your own domain on a
+Linux VPS you control (DigitalOcean, Hetzner, EC2, etc. — anything with SSH
+and Docker).
+
+### Why these specific choices
+
+- **Docker** packages the app and its dependencies identically to how it runs
+  in CI, so "works on my machine" failures don't show up in production.
+- **Qdrant runs alongside the app** in the same Compose stack rather than
+  requiring a separate managed service — one less account to manage, one less
+  network hop, and the data stays on infrastructure you control.
+- **The app binds to `127.0.0.1` only** (see `docker-compose.prod.yml`) and is
+  fronted by your existing reverse proxy (nginx/Caddy). This means your
+  existing TLS certificates and domain configuration keep working unchanged —
+  the demo just becomes another path/subdomain behind them.
+- **Usage caps are mandatory for a public deployment.** Every question costs
+  OpenAI API credits; `PER_IP_DAILY_LIMIT` and `GLOBAL_DAILY_LIMIT` put a hard
+  ceiling on daily spend regardless of traffic patterns. Set a hard spending
+  limit on your OpenAI account too, as defense in depth.
+
+### Steps
+
+1. **Get the code onto your server:**
+   ```bash
+   git clone https://github.com/iffat336/rag-eval-pipeline.git
+   cd rag-eval-pipeline
+   cp .env.example .env
+   ```
+   Edit `.env`: fill in `OPENAI_API_KEY`, and set `PER_IP_DAILY_LIMIT` /
+   `GLOBAL_DAILY_LIMIT` to whatever ceiling you're comfortable with. Leave
+   `QDRANT_URL` as-is — `docker-compose.prod.yml` points it at the bundled
+   Qdrant container automatically.
+
+2. **Build and start the stack:**
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+   This builds the app image, and starts both the app (on `127.0.0.1:8000`)
+   and Qdrant (internal-only — not exposed to the host network).
+
+3. **Index the sample documents into the running Qdrant:**
+   ```bash
+   docker compose -f docker-compose.prod.yml exec app \
+     python -m src.ingestion.indexer data/docs
+   ```
+   Run this once after the first startup, and again any time you change the
+   contents of `data/docs/`.
+
+4. **Point your reverse proxy at the app.** With nginx, add a server block (or
+   a `location` inside an existing one) that proxies to `127.0.0.1:8000`:
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name demo.yourdomain.com;
+
+       # ... your existing TLS config (e.g. managed by certbot) ...
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+   Then reload nginx (`sudo nginx -t && sudo systemctl reload nginx`). If
+   you're using Caddy instead, a `reverse_proxy 127.0.0.1:8000` directive in
+   the relevant site block does the same thing with automatic TLS.
+
+5. **Point DNS at your server** (an `A`/`AAAA` record for `demo.yourdomain.com`
+   → your server's IP) if you're using a new subdomain, and obtain a
+   certificate for it (`certbot --nginx -d demo.yourdomain.com` is the
+   standard route if you're already using certbot for the rest of the site).
+
+6. **Verify and watch logs:**
+   ```bash
+   curl -s http://127.0.0.1:8000/api/health
+   docker compose -f docker-compose.prod.yml logs -f app
+   ```
+
+### Operating it day to day
+
+- **Updating after a code change:**
+  ```bash
+  git pull
+  docker compose -f docker-compose.prod.yml up -d --build
+  ```
+- **Re-indexing after changing `data/docs/`:** re-run the indexing command from
+  step 3 (it recreates the collection from scratch).
+- **Adjusting usage caps:** edit `PER_IP_DAILY_LIMIT`/`GLOBAL_DAILY_LIMIT` in
+  `.env`, then `docker compose -f docker-compose.prod.yml up -d` to pick up
+  the change (no rebuild needed — only the app container restarts).
+- **Resetting usage counters:** they're in-memory and reset automatically at
+  midnight (server time) or on container restart — there's no persistent
+  state to clean up.
 
 ## Evaluation suite in depth
 
